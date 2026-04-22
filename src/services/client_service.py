@@ -10,3 +10,7 @@ async def create_client(message: Message) -> bool:
         await user_crud.add_user(client)
         return True
     return False
+
+
+async def get_client_by_telegram_id(tg_id: int) -> Client | None:
+    return await user_crud.get_user_by_tg_id(tg_id)
