@@ -220,7 +220,7 @@ async def select_date(callback_query: CallbackQuery, state: FSMContext):
     await state.set_state(NewOrderState.time)
 
     # Генерируем временные слоты
-    time_slots = client_service.generate_time_slots(selected_date, step_minutes=30)
+    time_slots = client_service.generate_time_slots(selected_date)
 
     # Фильтруем прошедшие слоты для сегодняшнего дня
     now = datetime.now()

@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import sys
-from os import getenv
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -18,8 +17,7 @@ import services.user_service as user_service
 from database.models import User, UserRoleEnum
 
 from core.db import SessionLocal
-
-TOKEN = getenv("BOT_TOKEN")
+from core.config import settings
 
 
 dp = Dispatcher()
@@ -38,18 +36,26 @@ async def cmd_start(message: Message) -> None:
         kb = InlineKeyboardBuilder()
 
         if not user:
-            await user_service.add_user_to_db(
-                User(
-                    tg_id=message.from_user.id,
-                    name=message.from_user.first_name,
-                    username=message.from_user.username,
-                ),
-                session,
+            # Определяем роль нового пользователя
+            admin_ids = settings.get_admin_ids()
+            role = (
+                UserRoleEnum.ADMIN
+                if message.from_user.id in admin_ids
+                else UserRoleEnum.CLIENT
             )
-        if user and user.role == UserRoleEnum.WORKER:
+
+            user = User(
+                tg_id=message.from_user.id,
+                name=message.from_user.first_name,
+                username=message.from_user.username,
+                role=role,
+            )
+            await user_service.add_user_to_db(user, session)
+
+        if user.role == UserRoleEnum.WORKER:
             kb.button(text="Мои заказы", callback_data="worker.my_orders")
             text = f"Приветствую, {message.from_user.first_name}! Выберите действие:"
-        elif user and user.role == UserRoleEnum.ADMIN:
+        elif user.role == UserRoleEnum.ADMIN:
             kb.button(
                 text="Управление пользователями", callback_data="admin.users_management"
             )
@@ -67,6 +73,7 @@ async def cmd_start(message: Message) -> None:
         else:
             kb.button(text="Заказать услугу", callback_data="client.new_order")
             kb.button(text="Мои заказы", callback_data="client.my_orders")
+            kb.button(text="Удалить аккаунт", callback_data="client.delete_account")
             text = f"{message.from_user.first_name}, добро пожаловать в систему заказа услуг! Выберите действие:"
 
     await message.answer(text, reply_markup=kb.as_markup())
@@ -74,7 +81,10 @@ async def cmd_start(message: Message) -> None:
 
 async def main() -> None:
     # Initialize Bot instance with default bot properties which will be passed to all API calls
-    bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = Bot(
+        token=settings.BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
 
     # And the run events dispatching
     await dp.start_polling(bot)

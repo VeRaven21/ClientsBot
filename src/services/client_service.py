@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta
 from typing import List, Tuple
 from database.models import Order, User, Service
+from core.config import settings
 import crud.orders_crud as orders_crud
 import crud.user_crud as user_crud
 import crud.workers_crud as workers_crud
@@ -87,14 +88,17 @@ async def delete_client_account(session: AsyncSession, client_id: str) -> bool:
     return await user_crud.delete_user(session, client_id)
 
 
-def generate_time_slots(date: datetime, step_minutes: int = 30) -> List[datetime]:
+def generate_time_slots(date: datetime, step_minutes: int = None) -> List[datetime]:
     """
     Генерировать временные слоты на день с указанным шагом
-    Рабочее время: с 9:00 до 18:00
+    Рабочее время берется из настроек
     """
+    if step_minutes is None:
+        step_minutes = settings.BOOKING_INTERVAL_MINUTES
+
     slots = []
-    start_hour = 9
-    end_hour = 18
+    start_hour = settings.WORK_START_HOUR
+    end_hour = settings.WORK_END_HOUR
 
     current = date.replace(hour=start_hour, minute=0, second=0, microsecond=0)
     end = date.replace(hour=end_hour, minute=0, second=0, microsecond=0)
