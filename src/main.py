@@ -6,13 +6,73 @@ from os import getenv
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.filters import CommandStart
+from aiogram.types import Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from routers import client
+
+from routers import admin, client, worker
+
+import services.user_service as user_service
+
+from database.models import User, UserRoleEnum
+
+from core.db import SessionLocal
+
 TOKEN = getenv("BOT_TOKEN")
 
 
 dp = Dispatcher()
+dp.include_router(admin.router)
 dp.include_router(client.router)
+dp.include_router(worker.router)
+
+
+@dp.message(CommandStart())
+async def cmd_start(message: Message) -> None:
+    async with SessionLocal() as session:
+        user: User | None = await user_service.get_user_by_tg_id(
+            message.from_user.id, session
+        )
+
+        kb = InlineKeyboardBuilder()
+
+        if not user:
+            await user_service.add_user_to_db(
+                User(
+                    tg_id=message.from_user.id,
+                    name=message.from_user.first_name,
+                    username=message.from_user.username,
+                ),
+                session,
+            )
+        if user and user.role == UserRoleEnum.WORKER:
+            kb.button(text="Мои заказы", callback_data="worker.my_orders")
+            kb.button(
+                text="Управление услугами", callback_data="worker.services_management"
+            )
+            text = f"Приветствую, {message.from_user.first_name}! Выберите действие:"
+        elif user and user.role == UserRoleEnum.ADMIN:
+            kb.button(
+                text="Управление пользователями", callback_data="admin.users_management"
+            )
+            kb.button(
+                text="Управление услугами", callback_data="admin.services_management"
+            )
+            kb.button(
+                text="Управление заказами", callback_data="admin.orders_management"
+            )
+            kb.button(
+                text="Управление сотрудниками", callback_data="admin.workers_management"
+            )
+            kb.adjust(2)
+            text = f"Приветствую, {message.from_user.first_name}! Выберите действие:"
+        else:
+            kb.button(text="Заказать услугу", callback_data="client.new_order")
+            kb.button(text="Мои заказы", callback_data="client.my_orders")
+            text = f"{message.from_user.first_name}, добро пожаловать в систему заказа услуг! Выберите действие:"
+
+    await message.answer(text, reply_markup=kb.as_markup())
 
 
 async def main() -> None:

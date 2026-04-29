@@ -26,12 +26,12 @@ class Order(Base):
     )
 
     client_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("clients.id", ondelete="CASCADE")
+        ForeignKey("users.id", ondelete="CASCADE")
     )
     service_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("services.id", ondelete="CASCADE")
     )
     worker_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("workers.id", ondelete="CASCADE")
+        ForeignKey("users.id", ondelete="CASCADE")
     )
     start_time = mapped_column(DateTime(timezone=True), nullable=False)
