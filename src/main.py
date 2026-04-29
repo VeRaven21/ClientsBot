@@ -48,9 +48,6 @@ async def cmd_start(message: Message) -> None:
             )
         if user and user.role == UserRoleEnum.WORKER:
             kb.button(text="Мои заказы", callback_data="worker.my_orders")
-            kb.button(
-                text="Управление услугами", callback_data="worker.services_management"
-            )
             text = f"Приветствую, {message.from_user.first_name}! Выберите действие:"
         elif user and user.role == UserRoleEnum.ADMIN:
             kb.button(
