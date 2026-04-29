@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from datetime import datetime, timedelta
 from database.models import Order, User, Service
 from typing import List, Tuple
@@ -28,3 +28,9 @@ async def get_orders_by_worker_and_date(
         .order_by(Order.start_time)
     )
     return result.all()
+
+
+async def get_total_orders_count(session: AsyncSession) -> int:
+    """Получить общее количество заказов"""
+    result = await session.execute(select(func.count(Order.id)))
+    return result.scalar()

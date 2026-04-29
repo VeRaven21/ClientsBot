@@ -15,7 +15,6 @@ from aiogram.filters import StateFilter
 from models import ServicesResponse
 from services import services_service
 from core.db import SessionLocal
-from database.models import Service
 
 router = Router()
 
@@ -23,23 +22,16 @@ router = Router()
 async def services_list_page(page: int, button_prefix: str) -> InlineKeyboardBuilder:
     """Создает клавиатуру со списком услуг с пагинацией"""
     async with SessionLocal() as session:
-        services: ServicesResponse = await services_service.get_services(session)
+        all_services = await services_service.get_all_services(session)
+
+    services_on_page, total_pages = (
+        services_service.format_services_list_for_pagination(all_services, page)
+    )
 
     kb = InlineKeyboardBuilder()
-    total_services = len(services.services)
-    total_pages = (total_services + 4) // 5  # Округление вверх для 5 услуг на страницу
-
-    # Проверяем, что страница в допустимых пределах
-    if page < 1:
-        page = 1
-    if page > total_pages and total_pages > 0:
-        page = total_pages
-
-    start = (page - 1) * 5
-    end = start + 5
 
     # Добавляем кнопки услуг по одной в строке
-    for service in services.services[start:end]:
+    for service in services_on_page:
         kb.row(
             InlineKeyboardButton(
                 text=f"{service.name} - {service.price} руб.",
@@ -48,8 +40,6 @@ async def services_list_page(page: int, button_prefix: str) -> InlineKeyboardBui
         )
 
     # Добавляем кнопки управления в одну строку
-    # Кнопка "назад" активна только если не на первой странице
-    # Кнопка "вперед" активна только если не на последней странице
     nav_buttons = []
 
     if page > 1:
@@ -284,7 +274,7 @@ async def edit_service_select_action(callback_query: CallbackQuery, state: FSMCo
 
         # Получаем информацию об услуге
         async with SessionLocal() as session:
-            service = await session.get(Service, service_id)
+            service = await services_service.get_service_by_id(session, service_id)
             if not service:
                 await callback_query.answer("Услуга не найдена", show_alert=True)
                 return
@@ -382,97 +372,31 @@ async def process_edit_value(message: Message, state: FSMContext):
     field = data.get("field")
     new_value = message.text
 
-    try:
-        async with SessionLocal() as session:
-            service = await session.get(Service, service_id)
-            if not service:
-                await message.answer(
-                    "Услуга не найдена", reply_markup=ReplyKeyboardRemove()
-                )
-                await state.clear()
-                return
-
-            # Валидация и обновление поля
-            if field == "name":
-                # Проверяем, не существует ли услуга с таким названием
-                existing = await services_service.get_service_by_name(
-                    session, new_value
-                )
-                if existing and str(existing.id) != service_id:
-                    cancel_kb = ReplyKeyboardMarkup(
-                        keyboard=[[KeyboardButton(text="Отмена")]], resize_keyboard=True
-                    )
-                    await message.answer(
-                        f"Услуга с названием '{new_value}' уже существует. Попробуйте другое название:",
-                        reply_markup=cancel_kb,
-                    )
-                    return
-                service.name = new_value
-            elif field == "price":
-                try:
-                    price = int(new_value)
-                    if price <= 0:
-                        cancel_kb = ReplyKeyboardMarkup(
-                            keyboard=[[KeyboardButton(text="Отмена")]],
-                            resize_keyboard=True,
-                        )
-                        await message.answer(
-                            "Цена должна быть положительным числом. Попробуйте еще раз:",
-                            reply_markup=cancel_kb,
-                        )
-                        return
-                    service.price = price
-                except ValueError:
-                    cancel_kb = ReplyKeyboardMarkup(
-                        keyboard=[[KeyboardButton(text="Отмена")]], resize_keyboard=True
-                    )
-                    await message.answer(
-                        "Цена должна быть целым числом. Попробуйте еще раз:",
-                        reply_markup=cancel_kb,
-                    )
-                    return
-            elif field == "lenght":
-                try:
-                    lenght = int(new_value)
-                    if lenght <= 0:
-                        cancel_kb = ReplyKeyboardMarkup(
-                            keyboard=[[KeyboardButton(text="Отмена")]],
-                            resize_keyboard=True,
-                        )
-                        await message.answer(
-                            "Длительность должна быть положительным числом. Попробуйте еще раз:",
-                            reply_markup=cancel_kb,
-                        )
-                        return
-                    service.lenght = lenght
-                except ValueError:
-                    cancel_kb = ReplyKeyboardMarkup(
-                        keyboard=[[KeyboardButton(text="Отмена")]], resize_keyboard=True
-                    )
-                    await message.answer(
-                        "Длительность должна быть целым числом. Попробуйте еще раз:",
-                        reply_markup=cancel_kb,
-                    )
-                    return
-
-            await session.commit()
-
-            field_names = {
-                "name": "Название",
-                "price": "Цена",
-                "lenght": "Длительность",
-            }
-
-            await message.answer(
-                f"{field_names[field]} услуги успешно обновлено!",
-                reply_markup=ReplyKeyboardRemove(),
-            )
-
-    except Exception as e:
-        await message.answer(
-            f"Произошла ошибка при обновлении: {str(e)}",
-            reply_markup=ReplyKeyboardRemove(),
+    async with SessionLocal() as session:
+        success, error_msg = await services_service.update_service_field(
+            session, service_id, field, new_value
         )
+
+    if not success:
+        cancel_kb = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="Отмена")]], resize_keyboard=True
+        )
+        await message.answer(
+            f"{error_msg}. Попробуйте еще раз:",
+            reply_markup=cancel_kb,
+        )
+        return
+
+    field_names = {
+        "name": "Название",
+        "price": "Цена",
+        "lenght": "Длительность",
+    }
+
+    await message.answer(
+        f"{field_names[field]} услуги успешно обновлено!",
+        reply_markup=ReplyKeyboardRemove(),
+    )
 
     await state.clear()
     kb = await services_management_menu()

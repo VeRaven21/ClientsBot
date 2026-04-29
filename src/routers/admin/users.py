@@ -1,9 +1,8 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from sqlalchemy import select, func
-from database.models import User, UserRoleEnum
 from core.db import SessionLocal
+from crud import user_crud
 
 router = Router()
 
@@ -12,27 +11,14 @@ router = Router()
 async def users_management(callback_query: CallbackQuery):
     """Обработчик управления пользователями - показывает статистику"""
     async with SessionLocal() as session:
-        # Получаем количество пользователей по ролям
-        result = await session.execute(
-            select(User.role, func.count(User.id)).group_by(User.role)
-        )
-        stats = dict(result.all())
-
-        # Получаем общее количество
-        total_result = await session.execute(select(func.count(User.id)))
-        total = total_result.scalar()
-
-    # Формируем текст статистики
-    clients = stats.get(UserRoleEnum.CLIENT, 0)
-    workers = stats.get(UserRoleEnum.WORKER, 0)
-    admins = stats.get(UserRoleEnum.ADMIN, 0)
+        stats = await user_crud.get_users_stats(session)
 
     text = (
         f"📊 <b>Статистика пользователей</b>\n\n"
-        f"👥 Всего пользователей: <b>{total}</b>\n\n"
-        f"👤 Клиентов: <b>{clients}</b>\n"
-        f"👷 Работников: <b>{workers}</b>\n"
-        f"👨‍💼 Администраторов: <b>{admins}</b>"
+        f"👥 Всего пользователей: <b>{stats['total']}</b>\n\n"
+        f"👤 Клиентов: <b>{stats['clients']}</b>\n"
+        f"👷 Работников: <b>{stats['workers']}</b>\n"
+        f"👨‍💼 Администраторов: <b>{stats['admins']}</b>"
     )
 
     # Добавляем кнопку "Назад"

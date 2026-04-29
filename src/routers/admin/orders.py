@@ -1,9 +1,8 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from sqlalchemy import select, func
-from database.models import Order
 from core.db import SessionLocal
+from crud import orders_crud
 
 router = Router()
 
@@ -12,9 +11,7 @@ router = Router()
 async def orders_management(callback_query: CallbackQuery):
     """Обработчик управления заказами - показывает количество заказов"""
     async with SessionLocal() as session:
-        # Получаем общее количество заказов
-        result = await session.execute(select(func.count(Order.id)))
-        total_orders = result.scalar()
+        total_orders = await orders_crud.get_total_orders_count(session)
 
     text = (
         f"📋 <b>Управление заказами</b>\n\n"
