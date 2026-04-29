@@ -32,3 +32,13 @@ async def get_users_stats(session: AsyncSession) -> dict:
         "workers": stats.get(UserRoleEnum.WORKER, 0),
         "admins": stats.get(UserRoleEnum.ADMIN, 0),
     }
+
+
+async def delete_user(session: AsyncSession, user_id: str) -> bool:
+    """Удалить пользователя из БД"""
+    user = await session.get(User, user_id)
+    if not user:
+        return False
+    await session.delete(user)
+    await session.commit()
+    return True
